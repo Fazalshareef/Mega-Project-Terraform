@@ -141,24 +141,14 @@ resource "aws_eks_cluster" "devopsshack" {
     subnet_ids         = aws_subnet.devopsshack_subnet[*].id
     security_group_ids = [aws_security_group.cluster_sg.id]
   }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.cluster_policy
+  ]
 }
 
 ############################
-# EBS CSI Addon
-############################
-resource "aws_eks_addon" "ebs_csi" {
-  cluster_name = aws_eks_cluster.devopsshack.name
-  addon_name   = "aws-ebs-csi-driver"
-
-  resolve_conflicts_on_create = "OVERWRITE"
-
-  timeouts {
-    create = "40m"
-  }
-}
-
-############################
-# Node Group (LOW COST)
+# Node Group
 ############################
 resource "aws_eks_node_group" "devopsshack" {
   cluster_name    = aws_eks_cluster.devopsshack.name
@@ -173,6 +163,34 @@ resource "aws_eks_node_group" "devopsshack" {
   }
 
   instance_types = ["t3.micro"]
-  capacity_type  = "ON_DEMAND"
   disk_size      = 20
+
+  update_config {
+    max_unavailable = 1
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.worker_node,
+    aws_iam_role_policy_attachment.cni_policy,
+    aws_iam_role_policy_attachment.ecr_policy,
+    aws_iam_role_policy_attachment.ebs_policy
+  ]
+}
+
+############################
+# EBS CSI Addon (FIXED ORDER)
+############################
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name = aws_eks_cluster.devopsshack.name
+  addon_name   = "aws-ebs-csi-driver"
+
+  resolve_conflicts_on_create = "OVERWRITE"
+
+  timeouts {
+    create = "40m"
+  }
+
+  depends_on = [
+    aws_eks_node_group.devopsshack
+  ]
 }
